@@ -52,18 +52,32 @@ handle(Req, HandlerFun, MapFun, JsonDecode, JsonEncode)
     Response = try JsonDecode(Req) of
         DecodedJson -> handle(DecodedJson, HandlerFun, MapFun)
     catch
-        _:_ -> {reply, parseerror()}
+        error:DecodeErrorReason ->
+            lager:error(
+                "Could not decode JSON-RPC request.~n"
+                "Request: ~s~n"
+                "Reason: ~p~n"
+                "Trace: ~p~n",
+                [Req, DecodeErrorReason, erlang:get_stacktrace()]
+            ),
+            {reply, parseerror()}
     end,
     case Response of
         noreply -> noreply;
         {reply, Reply} ->
             try JsonEncode(Reply) of
                 EncodedReply -> {reply, EncodedReply}
-            catch _:_ ->
-                error_logger:error_msg("Failed encoding reply as JSON: ~p",
-                                       [Reply]),
-                {reply, Error} = make_standard_error_response(internal_error, null),
-                {reply, JsonEncode(Error)}
+            catch
+                error:EncodeErrorReason ->
+                    lager:error(
+                        "Failed encoding reply as JSON.~n"
+                        "Reply: ~p~n"
+                        "Reason: ~p~n"
+                        "Trace: ~p~n",
+                        [Reply, EncodeErrorReason, erlang:get_stacktrace()]
+                    ),
+                    {reply, Error} = make_standard_error_response(internal_error, null),
+                    {reply, JsonEncode(Error)}
             end
     end.
 
@@ -196,10 +210,12 @@ dispatch({Method, Params, Id}, HandlerFun) ->
         throw:{jsonrpc2, Code, Message, Data} when is_integer(Code), is_binary(Message) ->
             %% Custom error, with data
             make_error_response(Code, Message, Data, Id);
-        Class:Error ->
-            error_logger:error_msg(
-                "Error in JSON-RPC handler for method ~s with params ~p: ~p:~p",
-                [Method, Params, Class, Error]),
+        error:Reason ->
+            lager:error(
+                "Error in JSON-RPC handler for method ~s with params ~p~n"
+                "Reason: ~p~n"
+                "Trace: ~p~n",
+                [Method, Params, Reason, erlang:get_stacktrace()]),
             make_standard_error_response(internal_error, Id)
     end;
 dispatch(_, _HandlerFun) ->

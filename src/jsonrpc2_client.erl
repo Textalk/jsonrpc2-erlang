@@ -55,7 +55,16 @@ batch_call(MethodsAndParams, TransportFun, JsonDecode, JsonEncode, FirstId) ->
 
 		%% JsonDecode can fail (any kind of error)
 		JsonResp = try JsonDecode(BinResp)
-		catch _:_ -> throw({jsonrpc2_client, invalid_json})
+		catch
+            error:Reason ->
+                lager:error(
+                    "Could not decode JSON-RPC Response.~n"
+                    "Response: ~s~n"
+                    "Reason: ~p~n"
+                    "Trace: ~p~n",
+                    [BinResp, Reason, erlang:get_stacktrace()]
+                ),
+                throw({jsonrpc2_client, invalid_json})
 		end,
 
 		%% parse_response can fail by throwing invalid_jsonrpc_response

@@ -210,12 +210,13 @@ dispatch({Method, Params, Id}, HandlerFun) ->
         throw:{jsonrpc2, Code, Message, Data} when is_integer(Code), is_binary(Message) ->
             %% Custom error, with data
             make_error_response(Code, Message, Data, Id);
-        error:Reason ->
+        Class:Reason ->
             lager:error(
                 "Error in JSON-RPC handler for method ~s with params ~p~n"
+                "Class: ~p~n"
                 "Reason: ~p~n"
                 "Trace: ~p~n",
-                [Method, Params, Reason, erlang:get_stacktrace()]),
+                [Method, Params, Class, Reason, erlang:get_stacktrace()]),
             make_standard_error_response(internal_error, Id)
     end;
 dispatch(_, _HandlerFun) ->
